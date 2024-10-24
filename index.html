@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AP-TCTR-DEMO</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet and jQuery -->
+  <link rel="stylesheet" href="https://npmcdn.com/leaflet@1.0.3/dist/leaflet.css" />
+  <script src="https://npmcdn.com/leaflet@1.0.3/dist/leaflet.js"></script>
+  <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+
+  <!-- Esri Leaflet Plugin -->
+  <script src="https://unpkg.com/esri-leaflet/dist/esri-leaflet.js"></script>
+
+  <!-- Leaflet Control Geocoder -->
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+
+  <!--leaflet-velocity-->
+  <link rel="stylesheet" href="leaflet-velocity.css" />
+  <script src="leaflet-velocity.js"></script>
+
+  <script src="velocityControl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0"></script>
+
+  <!-- 引入 Axios 用于进行 API 请求 -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="warningData.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden; /* 去除滚动条 */
+    }
+    #map {
+      height: 100vh;
+    }
+    .latlng-info {
+      position: absolute;
+      bottom: 25px;
+      right: 10px;
+      width: 200px; /* 设置固定宽度 */
+      padding: 5px;
+      background: rgba(255, 255, 255, 0.5);
+      font: 11px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
+      z-index: 1000;
+      text-align: center; /* 文字居中 */
+    }
+    .blinking-marker {
+      animation: blinking 2s infinite;
+    }
+    @keyframes blinking {
+      0% { opacity: 0.2; }
+      50% { opacity: 1; }
+      100% { opacity: 0.2; }
+    }
+    .file-menu {
+      position: absolute;
+      top: 20px;
+      right: 15px;
+      background: rgba(255, 255, 255, 0.5);
+      padding: 5px 10px;
+      font: 20px "Helvetica Neue", Arial, Helvetica, sans-serif;
+      z-index: 1001;
+    }
+
+    /* 新增的菜单容器样式 */
+    .menu-container {
+      position: absolute;
+      top: 70px;
+      right: 15px;
+      display: flex;
+      flex-direction: column; /* 让按钮垂直排列 */
+      gap: 10px; /* 设置按钮之间的间距 */
+      z-index: 1001;
+    }
+
+    .wind-menu, .temp-menu, .rain-menu {
+      background: rgba(255, 255, 255, 0.8);
+      padding: 5px;
+      font: 14px "Helvetica Neue", Arial, Helvetica, sans-serif;
+    }
+
+    .slider-container {
+      display: none; /* 初始状态为隐藏 */
+      text-align: center;
+    }
+    .toggle-button {
+      width: 70px; /* 设置固定宽度 */
+      background-color: #367d39;
+      color: white;
+      padding: 5px;
+      text-align: center;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      display: inline-block;
+    }
+    .toggle-button:hover {
+      background-color: #45a049;
+    }
+    .toggle-button.temp {
+      background-color: #cc9a05; 
+    }
+    .toggle-button.temp:hover {
+      background-color: #FFC107; 
+    }
+    .toggle-button.rain {
+      background-color: #0056b3;  
+    }
+    .toggle-button.rain:hover {
+      background-color: #007BFF;
+    }
+
+    .time-slider-container {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.5);
+      padding: 5px 20px;
+      width: 50%;
+      text-align: center;
+      font: 14px "Helvetica Neue", Arial, Helvetica, sans-serif;
+      z-index: 1001;
+    }
+    #timeSlider {
+      width: 100%;
+    }
+    #windSelectRange, #tempSelectRange {
+      writing-mode: vertical-lr; /* 将滑杆改为纵向滑动 */
+      direction: rtl; 
+      width: 65px; /* 根据需要调整滑杆的宽度 */
+      height: 250px;
+    }
+
+    .warning-info {
+      position: absolute;
+      top: 100px;
+      left: 15px;
+      background: rgba(255, 255, 255, 0.5);
+      padding: 5px 10px;
+      font: 14px "Helvetica Neue", Arial, Helvetica, sans-serif;
+      z-index: 1001;
+      display: none; /* 初始隐藏 */
+      width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="latlng-info" id="latlngInfo"><b>经度:</b> 121.90, <b>纬度:</b> 30.87</div>
+  
+  <!-- 图层选择 -->
+  <div class="file-menu">
+    <label for="layerSelect"><b>图层选择: </b></label>
+    <select id="layerSelect" style="font-size: 18px;">
+      <option value="Imagery">卫星图</option>
+      <option value="Streets">街道图</option>
+    </select>
+  </div>
+
+  <!-- 风温降按钮容器 -->
+  <div class="menu-container">
+    <!-- 风场选择 -->
+    <div class="wind-menu">
+      <button class="toggle-button" id="toggleWindMenu">风</button><br>
+      <div class="slider-container" id="sliderContainer">
+        <label for="windSelectRange"><b>高度选择</b><br></label>
+        <input type="range" id="windSelectRange" min="0" max="8" step="1" value="0"><br>
+        <span id="windLabel">无风场</span>
+      </div>
+    </div>
+
+    <!-- 温度选择 -->
+    <div class="temp-menu">
+      <button class="toggle-button temp" id="toggleTempMenu">温度</button><br>
+      <div class="slider-container" id="tempSliderContainer">
+        <label for="tempSelectRange"><b>高度选择</b><br></label>
+        <input type="range" id="tempSelectRange" min="0" max="8" step="1" value="0"><br>
+        <span id="tempLabel">无温度场</span>
+      </div>
+    </div>
+
+    <!-- 降水选择 -->
+    <div class="rain-menu">
+      <button class="toggle-button rain" id="toggleRainMenu">降水</button>
+    </div>
+  </div>
+
+
+  <!-- 时间选择 -->
+  <div class="time-slider-container" id="timeSliderContainer">
+    <span id="timeDisplay"><b>UTC时间</b><br>xxxx年xx月xx日 星期x xx:xx<br>北京时间<br>xxxx年xx月xx日 星期x xx:xx</span>
+    <input type="range" id="timeSlider" min="0" max="24" step="1" value="12">
+  </div>
+
+  <div class="warning-info" id="warningInfo" v-if="warnings.length > 0"
+    v-for="(warning, index) in warnings" :key="index">
+      <!-- <strong>{{ warning.title }}</strong> -->
+      <p><strong>预警类型:</strong> {{ warning.title }}</p>
+    <p><strong>预警信息:</strong> {{ warning.text }}</p>
+  </div>
+
+  <script>
+    // 初始化地图
+    var map = L.map('map', {
+      maxBounds: [[-90, -Infinity], [90, Infinity]], // 限制经纬度边界
+      minZoom: 2, // 最小缩放级别
+      maxBoundsViscosity: 1.0 // 保证到达边界后地图不再移动
+    }).setView([30.87, 121.90], 4);
+
+    // 添加 Esri 提供的地图瓦片图层
+    var imagery = L.esri.basemapLayer('Imagery').addTo(map);
+    var streets = L.esri.basemapLayer('Streets');
+
+    // 创建图层组
+    var baseLayers = {
+      "卫星图": imagery,
+      "街道图": streets
+    };
+
+    // 图层选择逻辑
+    document.getElementById('layerSelect').addEventListener('change', function(e) {
+      var selectedLayer = e.target.value;
+
+      // 移除当前所有图层
+      for (var layer in baseLayers) {
+        map.removeLayer(baseLayers[layer]);
+      }
+
+      // 根据选择添加相应的图层
+      if (selectedLayer === 'Streets') {
+        streets.addTo(map);
+      } else if (selectedLayer === 'Imagery') {
+        imagery.addTo(map);
+      }
+    });
+
+    // 添加地点搜索框 (Leaflet Control Geocoder)
+    var geocoder = L.Control.geocoder({
+      position: 'topleft',
+      collapsed: true,
+      placeholder: '搜索地点',
+      defaultMarkGeocode: false
+    }).on('markgeocode', function (e) {
+      map.setView(e.geocode.center, map.getZoom());
+      addMarkerAndAdminInfo(e.geocode.center.lat, e.geocode.center.lng);
+      document.querySelector('.leaflet-control-geocoder-form input').value = '';
+    }).addTo(map);
+
+    // 将搜索框放在缩放控制按钮上方
+    map.zoomControl.setPosition('bottomleft');
+
+    let warnings = [];
+
+    // 在地图上点击某个地点时触发与搜索相同的效果
+    map.on('contextmenu', function (e) {
+      // addMarkerAndAdminInfo(e.latlng.lat, e.latlng.lng);
+      var lat = e.latlng.lat;
+      var lon = e.latlng.lng;
+      addMarkerAndAdminInfo(lat, lon);  // 仍然保留现有的标记功能
+      warnings = fetchWarnings(lon, lat);  // 获取并显示预警信息
+      console.log(warnings);
+    });
+
+    // 纬经度限制函数
+    function constrainLatLng(lat, lng) {
+      // 限制纬度在 -90 到 90 之间
+      if (lat > 90) lat = 90;
+      if (lat < -90) lat = -90;
+
+      // 限制经度在 -180 到 180 之间
+      if (lng > 180) lng = lng - 360;
+      if (lng < -180) lng = lng + 360;
+
+      return { lat, lng };
+    }
+
+    // 经纬度和台风概率的数据存储
+    var strikeProbabilityDataMap = {};
+
+    // 使用AJAX读取txt文件并按经纬度分组存储
+    $.get('Strike_Pro_NCEP-GEFS_2416_2024092608_v.txt', function(data) {
+        var lines = data.split('\n');
+        lines.forEach(function(line) {
+            var parts = line.trim().split(/\s+/);
+            if (parts.length === 3) {
+                var lon = parseFloat(parts[0]);  // 保持原始经度
+                var lat = parseFloat(parts[1]);  // 保持原始纬度
+
+                if (!strikeProbabilityDataMap[lon]) {
+                    strikeProbabilityDataMap[lon] = {};
+                }
+
+                strikeProbabilityDataMap[lon][lat] = parseFloat(parts[2]);  // 台风袭击概率
+            }
+        });
+    });
+
+    // 根据用户点击的经纬度查找最接近的概率值
+    function findNearestProbability(lat, lng) {
+      var lonKey = lng.toFixed(1);  // 近似取经度
+      var latKey = lat.toFixed(1);  // 近似取纬度
+
+      // 查找经纬度对应的台风袭击概率值
+      if (strikeProbabilityDataMap[lonKey] && strikeProbabilityDataMap[lonKey][latKey]) {
+          return `${strikeProbabilityDataMap[lonKey][latKey]}%`;
+      } else {
+          return '--';
+      }
+    }
+
+    // 添加标记并显示概率信息
+    function addMarkerAndAdminInfo(lat, lng) {
+        var strikeProbability = findNearestProbability(lat, lng);
+
+        var adminInfo = `<b>台风袭击概率：</b>${strikeProbability}<br><span style="font-size: smaller;"><strong>经度: </strong>${lng.toFixed(3)}</span>,
+                   <span style="font-size: smaller;"><strong>纬度: </strong>${lat.toFixed(3)}</span>`;
+
+        var customMarker = L.circleMarker([lat, lng], {
+            radius: 3,
+            color: '#CC0000',
+            fillColor: '#CC0000',
+            fillOpacity: 0.8,
+            className: 'blinking-marker'
+        }).addTo(map).bindPopup(adminInfo, { offset: L.point(0, -5) }).openPopup();
+
+        customMarker.on('popupclose', function () {
+            map.removeLayer(customMarker);
+        });
+    }
+
+    // 在地图上点击某个地点时触发显示
+    map.on('click', function (e) {
+      var latlng = constrainLatLng(e.latlng.lat, e.latlng.lng);
+      addMarkerAndAdminInfo(latlng.lat, latlng.lng);
+    });
+
+    // 经纬度信息显示
+    var latlngInfo = document.getElementById('latlngInfo');
+    map.on('mousemove', function (e) {
+      var latlng = constrainLatLng(e.latlng.lat, e.latlng.lng);
+      latlngInfo.innerHTML = '<b>经度:</b> ' + latlng.lng.toFixed(5) + '<b>,</b> ' + '<b>纬度:</b> ' + latlng.lat.toFixed(5);
+    });
+
+    var velocityLayerGroup = L.layerGroup().addTo(map);  // 用来管理风场图层
+    var currentRequestId = 0;  // 当前请求的唯一标识符
+
+    // 封装风场图层生成函数
+    function createWindLayer(time, windLevel) {
+      var requestId = ++currentRequestId;  // 每次生成新的请求ID
+
+      // 清空之前的所有风场图层
+      velocityLayerGroup.clearLayers();
+
+      // 拼接文件名，如 "2023101506_wind850.json"
+      var jsonPath = `${time}_${windLevel}.json`;
+      console.log(`请求的风场数据文件: ${jsonPath}`);
+      jsonPath = `wind-global.json`;
+
+      // 通过 AJAX 获取新的风场数据
+      $.getJSON(jsonPath, function(data) {
+        // 如果请求ID不是当前的，忽略此请求
+        if (requestId !== currentRequestId) return;
+
+        var newVelocityLayer = L.velocityLayer({
+          displayValues: true,
+          displayOptions: {
+            velocityType: "",
+            position: "bottomright",
+            emptyString: "No wind data",
+            showCardinal: true,
+          },
+          data: data,
+          maxVelocity: 30,
+          // colorScale: ['#FFFFFF','#FFFFFF'],
+          velocityScale: 0.006
+        });
+
+        // 将新的风场图层添加到图层组
+        velocityLayerGroup.addLayer(newVelocityLayer);
+      });
+    }
+
+    // 获取时间滑杆值并生成文件名
+    function updateWindLayer() {
+      var selectedTimeStep = timeSlider.value;  // 当前时间滑杆的值
+      var selectedWindStep = windSelectRange.value;  // 当前风场滑杆的值
+
+      // 计算出对应的时间和风层
+      var selectedTime = new Date(startTime.getTime() + selectedTimeStep * timeOffset);
+      var utcTime = selectedTime.getUTCFullYear().toString() +
+              ('0' + (selectedTime.getUTCMonth() + 1)).slice(-2) +  // 补0确保两位数月份
+              ('0' + selectedTime.getUTCDate()).slice(-2) +         // 补0确保两位数日期
+              ('0' + selectedTime.getUTCHours()).slice(-2);         // 补0确保两位数小时
+
+      var selectedWind = windLayers[selectedWindStep].file;
+
+      // 加载对应的风场数据
+      if (selectedWind === '') {
+        velocityLayerGroup.clearLayers();  // 清除当前所有风场图层
+      } else {
+        createWindLayer(utcTime, selectedWind);
+      }
+    }
+
+    // 使用滑杆进行风场切换
+    var windSelectRange = document.getElementById('windSelectRange');
+    var windLabel = document.getElementById('windLabel');
+
+    // 风场层配置
+    var windLayers = [
+      { label: '无风场', file: '' },            // 无风场对应空文件
+      { label: '海平面层', file: 'surface' },    // 海平面层对应 'surface'
+      { label: '1000 hPa', file: '1000' },       // 1000 hPa对应 '1000'
+      { label: '850 hPa', file: '850' },         // 850 hPa对应 '850'
+      { label: '700 hPa', file: '700' },         // 700 hPa对应 '700'
+      { label: '500 hPa', file: '500' },         // 500 hPa对应 '500'
+      { label: '200 hPa', file: '200' },         // 200 hPa对应 '200'
+      { label: '100 hPa', file: '100' },         // 100 hPa对应 '100'
+      { label: '50 hPa', file: '50' }            // 50 hPa对应 '50'
+    ];
+
+    let debounceTimeout = null;  // 用于存储防抖定时器的 ID
+
+    windSelectRange.addEventListener('input', function(e) {
+        var selectedWind = parseInt(e.target.value, 10);  // 获取当前风场选择的值
+        windLabel.innerHTML = windLayers[selectedWind].label;  // 更新风场选择标签
+
+        // 每次滑杆移动时，清除之前的定时器，避免频繁触发
+        clearTimeout(debounceTimeout);
+
+        // 设置新的定时器，在滑杆停止滑动 200 毫秒后触发更新
+        debounceTimeout = setTimeout(function() {
+            updateWindLayer();  // 调用更新风场函数
+        }, 200);  // 延迟 200 毫秒，可以根据需要调整延迟时间
+    });
+
+    // 时间滑杆相关代码
+    var timeSlider = document.getElementById('timeSlider');
+    var timeDisplay = document.getElementById('timeDisplay');
+
+    // 获取当前的 UTC 时间
+    var now = new Date();
+    var currentUTCHours = Math.floor(now.getUTCHours() / 6) * 6;
+    now.setUTCHours(currentUTCHours, 0, 0, 0);  // 将当前时间设为最接近的6小时刻度
+
+    // 设置时间滑杆的值
+    var timeOffset = 6 * 3600 * 1000;  // 每次移动滑杆是6小时
+    var startTime = new Date(now.getTime() - 3 * 4 * timeOffset);  // 3天前
+    var endTime = new Date(now.getTime() + 3 * 4 * timeOffset);    // 3天后
+    var timeSteps = (endTime - startTime) / timeOffset;
+
+    timeSlider.max = timeSteps;
+
+    function updateTimeDisplay(selectedStep) {
+      var selectedTime = new Date(startTime.getTime() + selectedStep * timeOffset);
+      var selectedUTC = selectedTime.toUTCString().split(' ')[0];  // 获取 UTC 时间
+      var selectedBeijingTime = new Date(selectedTime.getTime() + 8 * 3600 * 1000);  // UTC 转北京时间
+      var dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+
+      var utcString = `<b>UTC时间</b><br>${selectedTime.getUTCFullYear()}年${selectedTime.getUTCMonth() + 1}月${selectedTime.getUTCDate()}日 星期${dayNames[selectedTime.getUTCDay()]} ${selectedTime.getUTCHours()}:00`;
+      var beijingString = `<b>北京时间</b><br>${selectedBeijingTime.getUTCFullYear()}年${selectedBeijingTime.getUTCMonth() + 1}月${selectedBeijingTime.getUTCDate()}日 星期${dayNames[selectedBeijingTime.getUTCDay()]} ${selectedBeijingTime.getUTCHours()}:00`;
+
+      timeDisplay.innerHTML = `${utcString}<br>${beijingString}`;
+    }
+
+    // 初始显示时间
+    updateTimeDisplay(timeSlider.value);
+
+    let timeDebounceTimeout = null;  // 用于存储时间滑杆防抖定时器的 ID
+
+    timeSlider.addEventListener('input', function() {
+        updateTimeDisplay(timeSlider.value);  // 实时更新时间显示
+
+        // 每次滑杆移动时，清除之前的定时器，避免频繁触发
+        clearTimeout(timeDebounceTimeout);
+
+        // 设置新的定时器，在滑杆停止滑动 200 毫秒后触发更新
+        timeDebounceTimeout = setTimeout(function() {
+            updateWindLayer();  // 更新风场
+        }, 200);  // 延迟 200 毫秒
+    });
+
+     // 温度层设置
+     var tempLayers = [
+     { label: '无温度场', file: '' },            // 无风场对应空文件
+      { label: '地面温度', file: 'surface' },    // 海平面层对应 'surface'
+      { label: '1000 hPa', file: '1000' },       // 1000 hPa对应 '1000'
+      { label: '850 hPa', file: '850' },         // 850 hPa对应 '850'
+      { label: '700 hPa', file: '700' },         // 700 hPa对应 '700'
+      { label: '500 hPa', file: '500' },         // 500 hPa对应 '500'
+      { label: '200 hPa', file: '200' },         // 200 hPa对应 '200'
+      { label: '100 hPa', file: '100' },         // 100 hPa对应 '100'
+      { label: '50 hPa', file: '50' }            // 50 hPa对应 '50'
+    ];
+
+    // 温度滑杆逻辑
+    var tempSelectRange = document.getElementById('tempSelectRange');
+    var tempLabel = document.getElementById('tempLabel');
+    var tempDebounceTimeout = null;
+
+    tempSelectRange.addEventListener('input', function(e) {
+      var selectedTemp = parseInt(e.target.value, 10);
+      tempLabel.innerHTML = tempLayers[selectedTemp].label;
+
+      clearTimeout(tempDebounceTimeout);
+      tempDebounceTimeout = setTimeout(function() {
+        console.log(`选择的温度层: ${tempLayers[selectedTemp].label}`);
+        // 这里可以扩展实际的温度层加载逻辑，暂时没有实际功能
+      }, 200);
+    });
+    
+
+    // 获取按钮和滑动条的引用
+var toggleButton = document.getElementById('toggleWindMenu');
+var sliderContainer = document.getElementById('sliderContainer');
+
+var toggleTempButton = document.getElementById('toggleTempMenu');
+var tempSliderContainer = document.getElementById('tempSliderContainer');
+
+var toggleRainButton = document.getElementById('toggleRainMenu');
+
+// 重置所有滑杆（除了当前点击的）
+function resetAllSliders(except) {
+  if (except !== 'wind') {
+    sliderContainer.style.display = 'none';
+    toggleButton.innerHTML = '风';
+  }
+  if (except !== 'temp') {
+    tempSliderContainer.style.display = 'none';
+    toggleTempButton.innerHTML = '温度';
+  }
+  if (except !== 'rain') {
+    // 此处是降水按钮，假如以后有展开逻辑的话可以在这里补充
+  }
+}
+
+// 展开或折叠风场滑杆
+toggleButton.addEventListener('click', function () {
+  if (sliderContainer.style.display === 'none') {
+    resetAllSliders('wind'); // 先重置其他滑杆
+    sliderContainer.style.display = 'inline-block';
+    toggleButton.innerHTML = '风';
+  } else {
+    sliderContainer.style.display = 'none';
+    toggleButton.innerHTML = '风';
+  }
+});
+
+// 展开或折叠温度滑杆
+toggleTempButton.addEventListener('click', function () {
+  if (tempSliderContainer.style.display === 'none') {
+    resetAllSliders('temp'); // 先重置其他滑杆
+    tempSliderContainer.style.display = 'inline-block';
+    toggleTempButton.innerHTML = '温度';
+  } else {
+    tempSliderContainer.style.display = 'none';
+    toggleTempButton.innerHTML = '温度';
+  }
+});
+
+// 展开或折叠降水按钮
+toggleRainButton.addEventListener('click', function () {
+  resetAllSliders('rain'); // 先重置其他滑杆
+  // 此处如果有降水的具体展开逻辑可以添加，当前只是用于激活按钮
+});
+
+  </script>
+</body>
+</html>

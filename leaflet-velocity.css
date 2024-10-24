@@ -1,0 +1,16 @@
+.leaflet-control-velocity {
+  bottom: 25px;
+  right: 0px;
+  width: 200px; /* 设置固定宽度 */
+  padding-top: 5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  font: 11px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
+  text-align: center; /* 文字居中 */
+}
+
+.velocity-overlay {
+  position: absolute;
+  z-index: 1;
+}
