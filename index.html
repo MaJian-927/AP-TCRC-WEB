@@ -38,6 +38,40 @@
     #map {
       height: 100vh;
     }
+    .header-container {
+      position: absolute;
+      top: 10px; /* 距离页面顶部的距离 */
+      left: 50%; /* 初步水平居中 */
+      transform: translateX(-50%); /* 通过平移使容器真正居中 */
+      display: flex;
+      align-items: center; /* 垂直居中对齐图标和文字 */
+      background: rgba(255, 255, 255, 0); /* 背景色，稍微透明 */
+      padding: 5px 10px; /* 内边距 */
+      border-radius: 5px; /* 圆角 */
+      z-index: 1001; /* 保证其在其他元素上方 */
+    }
+    .header-icon {
+      width: 50px; /* 图标宽度，可根据需要调整 */
+      height: 50px; /* 图标高度，可根据需要调整 */
+      margin-right: 10px; /* 图标和文字之间的间距 */
+    }
+
+    .header-text {
+      font: 22px "Helvetica Neue", Arial, Helvetica, sans-serif;
+      color: #ffffff; /* 文字颜色，可根据需要调整 */
+      line-height: 0.8; /* 设置行高，缩小文字之间的距离 */
+      margin-right: 10px;
+    }
+
+    .header-text-ch {
+      font: 30px "Helvetica Neue", Arial, Helvetica, sans-serif;
+      color: #ffffff; /* 文字颜色，可根据需要调整 */
+    }
+    .header-link {
+      font-family: "Helvetica Neue", Arial, Helvetica, sans-serif; /* 设置字体族 */
+      font-size: 15px; /* 设置字体大小 */
+    }
+
     .latlng-info {
       position: absolute;
       bottom: 25px;
@@ -61,6 +95,7 @@
       position: absolute;
       top: 20px;
       right: 15px;
+      border-radius: 3px; /* 圆角 */
       background: rgba(255, 255, 255, 0.5);
       padding: 5px 10px;
       font: 20px "Helvetica Neue", Arial, Helvetica, sans-serif;
@@ -70,7 +105,7 @@
     /* 新增的菜单容器样式 */
     .menu-container {
       position: absolute;
-      top: 70px;
+      top: 80px;
       right: 15px;
       display: flex;
       flex-direction: column; /* 让按钮垂直排列 */
@@ -114,15 +149,16 @@
     .toggle-button.rain:hover {
       background-color: #007BFF;
     }
-
     .time-slider-container {
       position: absolute;
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.4);
       padding: 5px 20px;
+      color: rgb(0, 0, 0);
       width: 50%;
+      border-radius: 20px; /* 圆角 */
       text-align: center;
       font: 14px "Helvetica Neue", Arial, Helvetica, sans-serif;
       z-index: 1001;
@@ -148,9 +184,15 @@
       display: none; /* 初始隐藏 */
       width: 300px;
     }
+
   </style>
 </head>
 <body>
+  <div class="header-container">
+    <img src="LOGO.png" alt="图标" class="header-icon">
+    <span class="header-text">Asia-Pacific Typhoon<a class="header-link"><br>Collaborative Research Center</a></span>
+  </div>
+
   <div id="map"></div>
   <div class="latlng-info" id="latlngInfo"><b>经度:</b> 121.90, <b>纬度:</b> 30.87</div>
   
